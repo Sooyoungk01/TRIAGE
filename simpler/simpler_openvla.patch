@@ -1,0 +1,403 @@
+diff --git a/scripts/move_near_variant_agg_240.sh b/scripts/move_near_variant_agg_240.sh
+new file mode 100644
+index 0000000..6f3dc6d
+--- /dev/null
++++ b/scripts/move_near_variant_agg_240.sh
+@@ -0,0 +1,142 @@
++ckpt_path=$1
++policy_model=$2
++action_ensemble_temp=$3
++logging_dir=$4
++gpu_id=$5
++
++declare -a arr=("${ckpt_path}")
++
++for ckpt_path in "${arr[@]}"; do echo "$ckpt_path"; done
++
++
++# base setup
++
++env_name=MoveNearGoogleInScene-v0
++scene_name=google_pick_coke_can_1_v4
++
++for ckpt_path in "${arr[@]}";
++
++do CUDA_VISIBLE_DEVICES=${gpu_id} python simpler_env/main_inference.py --policy-model ${policy_model} --ckpt-path ${ckpt_path} --action-ensemble-temp ${action_ensemble_temp} --logging-dir ${logging_dir} \
++  --robot google_robot_static \
++  --control-freq 3 --sim-freq 513 --max-episode-steps 80 \
++  --env-name ${env_name} --scene-name ${scene_name} \
++  --robot-init-x 0.35 0.35 1 --robot-init-y 0.21 0.21 1 --obj-variation-mode episode --obj-episode-range 0 24 \
++  --robot-init-rot-quat-center 0 0 0 1 --robot-init-rot-rpy-range 0 0 1 0 0 1 -0.09 -0.09 1;
++
++done
++
++
++
++# distractor
++
++for ckpt_path in "${arr[@]}";
++
++do CUDA_VISIBLE_DEVICES=${gpu_id} python simpler_env/main_inference.py --policy-model ${policy_model} --ckpt-path ${ckpt_path} --action-ensemble-temp ${action_ensemble_temp} --logging-dir ${logging_dir} \
++  --robot google_robot_static \
++  --control-freq 3 --sim-freq 513 --max-episode-steps 80 \
++  --env-name ${env_name} --scene-name ${scene_name} \
++  --robot-init-x 0.35 0.35 1 --robot-init-y 0.21 0.21 1 --obj-variation-mode episode --obj-episode-range 0 24 \
++  --robot-init-rot-quat-center 0 0 0 1 --robot-init-rot-rpy-range 0 0 1 0 0 1 -0.09 -0.09 1 \
++  --additional-env-build-kwargs no_distractor=True;
++
++done
++
++
++# backgrounds
++
++env_name=MoveNearGoogleInScene-v0
++declare -a scene_arr=("google_pick_coke_can_1_v4_alt_background" \
++                      "google_pick_coke_can_1_v4_alt_background_2")
++
++for scene_name in "${scene_arr[@]}";
++
++do for ckpt_path in "${arr[@]}";
++
++do CUDA_VISIBLE_DEVICES=${gpu_id} python simpler_env/main_inference.py --policy-model ${policy_model} --ckpt-path ${ckpt_path} --action-ensemble-temp ${action_ensemble_temp} --logging-dir ${logging_dir} \
++  --robot google_robot_static \
++  --control-freq 3 --sim-freq 513 --max-episode-steps 80 \
++  --env-name ${env_name} --scene-name ${scene_name} \
++  --robot-init-x 0.35 0.35 1 --robot-init-y 0.21 0.21 1 --obj-variation-mode episode --obj-episode-range 0 24 \
++  --robot-init-rot-quat-center 0 0 0 1 --robot-init-rot-rpy-range 0 0 1 0 0 1 -0.09 -0.09 1;
++
++done
++
++done
++
++
++
++
++
++# lighting
++
++env_name=MoveNearGoogleInScene-v0
++scene_name=google_pick_coke_can_1_v4
++
++for ckpt_path in "${arr[@]}";
++
++do CUDA_VISIBLE_DEVICES=${gpu_id} python simpler_env/main_inference.py --policy-model ${policy_model} --ckpt-path ${ckpt_path} --action-ensemble-temp ${action_ensemble_temp} --logging-dir ${logging_dir} \
++  --robot google_robot_static \
++  --control-freq 3 --sim-freq 513 --max-episode-steps 80 \
++  --env-name ${env_name} --scene-name ${scene_name} \
++  --robot-init-x 0.35 0.35 1 --robot-init-y 0.21 0.21 1 --obj-variation-mode episode --obj-episode-range 0 24 \
++  --robot-init-rot-quat-center 0 0 0 1 --robot-init-rot-rpy-range 0 0 1 0 0 1 -0.09 -0.09 1 \
++  --additional-env-build-kwargs slightly_darker_lighting=True;
++
++CUDA_VISIBLE_DEVICES=${gpu_id} python simpler_env/main_inference.py --policy-model ${policy_model} --ckpt-path ${ckpt_path} --action-ensemble-temp ${action_ensemble_temp} --logging-dir ${logging_dir} \
++  --robot google_robot_static \
++  --control-freq 3 --sim-freq 513 --max-episode-steps 80 \
++  --env-name ${env_name} --scene-name ${scene_name} \
++  --robot-init-x 0.35 0.35 1 --robot-init-y 0.21 0.21 1 --obj-variation-mode episode --obj-episode-range 0 24 \
++  --robot-init-rot-quat-center 0 0 0 1 --robot-init-rot-rpy-range 0 0 1 0 0 1 -0.09 -0.09 1 \
++  --additional-env-build-kwargs slightly_brighter_lighting=True;
++
++done
++
++
++
++
++
++# table textures
++
++env_name=MoveNearGoogleInScene-v0
++declare -a scene_arr=("Baked_sc1_staging_objaverse_cabinet1_h870" \
++                      "Baked_sc1_staging_objaverse_cabinet2_h870")
++
++for scene_name in "${scene_arr[@]}";
++
++do for ckpt_path in "${arr[@]}";
++
++do CUDA_VISIBLE_DEVICES=${gpu_id} python simpler_env/main_inference.py --policy-model ${policy_model} --ckpt-path ${ckpt_path} --action-ensemble-temp ${action_ensemble_temp} --logging-dir ${logging_dir} \
++  --robot google_robot_static \
++  --control-freq 3 --sim-freq 513 --max-episode-steps 80 \
++  --env-name ${env_name} --scene-name ${scene_name} \
++  --robot-init-x 0.35 0.35 1 --robot-init-y 0.21 0.21 1 --obj-variation-mode episode --obj-episode-range 0 24 \
++  --robot-init-rot-quat-center 0 0 0 1 --robot-init-rot-rpy-range 0 0 1 0 0 1 -0.09 -0.09 1;
++
++done
++
++done
++
++
++
++
++# camera orientations
++
++declare -a env_arr=("MoveNearAltGoogleCameraInScene-v0" \
++                   "MoveNearAltGoogleCamera2InScene-v0")
++scene_name=google_pick_coke_can_1_v4
++
++for env_name in "${env_arr[@]}";
++
++do for ckpt_path in "${arr[@]}";
++
++do CUDA_VISIBLE_DEVICES=${gpu_id} python simpler_env/main_inference.py --policy-model ${policy_model} --ckpt-path ${ckpt_path} --action-ensemble-temp ${action_ensemble_temp} --logging-dir ${logging_dir} \
++  --robot google_robot_static \
++  --control-freq 3 --sim-freq 513 --max-episode-steps 80 \
++  --env-name ${env_name} --scene-name ${scene_name} \
++  --robot-init-x 0.35 0.35 1 --robot-init-y 0.21 0.21 1 --obj-variation-mode episode --obj-episode-range 0 24 \
++  --robot-init-rot-quat-center 0 0 0 1 --robot-init-rot-rpy-range 0 0 1 0 0 1 -0.09 -0.09 1;
++
++done
++
++done
+diff --git a/scripts/pick_coke_can_variant_agg_240.sh b/scripts/pick_coke_can_variant_agg_240.sh
+new file mode 100644
+index 0000000..e3f88f9
+--- /dev/null
++++ b/scripts/pick_coke_can_variant_agg_240.sh
+@@ -0,0 +1,185 @@
++ckpt_path=$1
++policy_model=$2
++action_ensemble_temp=$3
++logging_dir=$4
++gpu_id=$5
++
++declare -a arr=($ckpt_path)
++
++# lr_switch=laying horizontally but flipped left-right to match real eval; upright=standing; laid_vertically=laying vertically
++declare -a coke_can_options_arr=("lr_switch=True" "upright=True" "laid_vertically=True")
++
++for ckpt_path in "${arr[@]}"; do echo "$ckpt_path"; done
++
++
++# base setup
++
++env_name=GraspSingleOpenedCokeCanInScene-v0
++scene_name=google_pick_coke_can_1_v4
++
++for coke_can_option in "${coke_can_options_arr[@]}";
++
++do for ckpt_path in "${arr[@]}";
++
++do CUDA_VISIBLE_DEVICES=${gpu_id} python simpler_env/main_inference.py --policy-model ${policy_model} --ckpt-path ${ckpt_path} --action-ensemble-temp ${action_ensemble_temp} --logging-dir ${logging_dir} \
++  --robot google_robot_static \
++  --control-freq 3 --sim-freq 513 --max-episode-steps 80 \
++  --env-name ${env_name} --scene-name ${scene_name} \
++  --robot-init-x 0.35 0.35 1 --robot-init-y 0.20 0.20 1 --obj-init-x -0.35 -0.12 3 --obj-init-y -0.02 0.42 3 \
++  --robot-init-rot-quat-center 0 0 0 1 --robot-init-rot-rpy-range 0 0 1 0 0 1 0 0 1 \
++  --additional-env-build-kwargs ${coke_can_option};
++
++done
++
++done
++
++
++
++# table textures
++
++env_name=GraspSingleOpenedCokeCanInScene-v0
++
++declare -a scene_arr=("Baked_sc1_staging_objaverse_cabinet1_h870" \
++                      "Baked_sc1_staging_objaverse_cabinet2_h870")
++
++
++for coke_can_option in "${coke_can_options_arr[@]}";
++
++do for scene_name in "${scene_arr[@]}";
++
++do for ckpt_path in "${arr[@]}";
++
++do CUDA_VISIBLE_DEVICES=${gpu_id} python simpler_env/main_inference.py --policy-model ${policy_model} --ckpt-path ${ckpt_path} --action-ensemble-temp ${action_ensemble_temp} --logging-dir ${logging_dir} \
++  --robot google_robot_static \
++  --control-freq 3 --sim-freq 513 --max-episode-steps 80 \
++  --env-name ${env_name} --scene-name ${scene_name} \
++  --robot-init-x 0.35 0.35 1 --robot-init-y 0.20 0.20 1 --obj-init-x -0.35 -0.12 3 --obj-init-y -0.02 0.42 3 \
++  --robot-init-rot-quat-center 0 0 0 1 --robot-init-rot-rpy-range 0 0 1 0 0 1 0 0 1 \
++  --additional-env-build-kwargs ${coke_can_option};
++
++done
++
++done
++
++done
++
++
++
++
++# distractors
++
++env_name=GraspSingleOpenedCokeCanDistractorInScene-v0
++scene_name=google_pick_coke_can_1_v4
++
++for coke_can_option in "${coke_can_options_arr[@]}";
++
++do for ckpt_path in "${arr[@]}";
++
++do CUDA_VISIBLE_DEVICES=${gpu_id} python simpler_env/main_inference.py --policy-model ${policy_model} --ckpt-path ${ckpt_path} --action-ensemble-temp ${action_ensemble_temp} --logging-dir ${logging_dir} \
++  --robot google_robot_static \
++  --control-freq 3 --sim-freq 513 --max-episode-steps 80 \
++  --env-name ${env_name} --scene-name ${scene_name} \
++  --robot-init-x 0.35 0.35 1 --robot-init-y 0.20 0.20 1 --obj-init-x -0.35 -0.12 3 --obj-init-y -0.02 0.42 3 \
++  --robot-init-rot-quat-center 0 0 0 1 --robot-init-rot-rpy-range 0 0 1 0 0 1 0 0 1 \
++  --additional-env-build-kwargs ${coke_can_option};
++
++CUDA_VISIBLE_DEVICES=${gpu_id} python simpler_env/main_inference.py --policy-model ${policy_model} --ckpt-path ${ckpt_path} --action-ensemble-temp ${action_ensemble_temp} --logging-dir ${logging_dir} \
++  --robot google_robot_static \
++  --control-freq 3 --sim-freq 513 --max-episode-steps 80 \
++  --env-name ${env_name} --scene-name ${scene_name} \
++  --robot-init-x 0.35 0.35 1 --robot-init-y 0.20 0.20 1 --obj-init-x -0.35 -0.12 3 --obj-init-y -0.02 0.42 3 \
++  --robot-init-rot-quat-center 0 0 0 1 --robot-init-rot-rpy-range 0 0 1 0 0 1 0 0 1 \
++  --additional-env-build-kwargs ${coke_can_option} distractor_config=more;
++
++done
++
++done
++
++
++
++
++# backgrounds
++
++env_name=GraspSingleOpenedCokeCanInScene-v0
++declare -a scene_arr=("google_pick_coke_can_1_v4_alt_background" \
++                      "google_pick_coke_can_1_v4_alt_background_2")
++
++for coke_can_option in "${coke_can_options_arr[@]}";
++
++do for scene_name in "${scene_arr[@]}";
++
++do for ckpt_path in "${arr[@]}";
++
++do CUDA_VISIBLE_DEVICES=${gpu_id} python simpler_env/main_inference.py --policy-model ${policy_model} --ckpt-path ${ckpt_path} --action-ensemble-temp ${action_ensemble_temp} --logging-dir ${logging_dir} \
++  --robot google_robot_static \
++  --control-freq 3 --sim-freq 513 --max-episode-steps 80 \
++  --env-name ${env_name} --scene-name ${scene_name} \
++  --robot-init-x 0.35 0.35 1 --robot-init-y 0.20 0.20 1 --obj-init-x -0.35 -0.12 3 --obj-init-y -0.02 0.42 3 \
++  --robot-init-rot-quat-center 0 0 0 1 --robot-init-rot-rpy-range 0 0 1 0 0 1 0 0 1 \
++  --additional-env-build-kwargs ${coke_can_option};
++
++done
++
++done
++
++done
++
++
++
++# lightings
++
++env_name=GraspSingleOpenedCokeCanInScene-v0
++scene_name=google_pick_coke_can_1_v4
++
++for coke_can_option in "${coke_can_options_arr[@]}";
++
++do for ckpt_path in "${arr[@]}";
++
++do CUDA_VISIBLE_DEVICES=${gpu_id} python simpler_env/main_inference.py --policy-model ${policy_model} --ckpt-path ${ckpt_path} --action-ensemble-temp ${action_ensemble_temp} --logging-dir ${logging_dir} \
++  --robot google_robot_static \
++  --control-freq 3 --sim-freq 513 --max-episode-steps 80 \
++  --env-name ${env_name} --scene-name ${scene_name} \
++  --robot-init-x 0.35 0.35 1 --robot-init-y 0.20 0.20 1 --obj-init-x -0.35 -0.12 3 --obj-init-y -0.02 0.42 3 \
++  --robot-init-rot-quat-center 0 0 0 1 --robot-init-rot-rpy-range 0 0 1 0 0 1 0 0 1 \
++  --additional-env-build-kwargs ${coke_can_option} slightly_darker_lighting=True;
++
++CUDA_VISIBLE_DEVICES=${gpu_id} python simpler_env/main_inference.py --policy-model ${policy_model} --ckpt-path ${ckpt_path} --action-ensemble-temp ${action_ensemble_temp} --logging-dir ${logging_dir} \
++  --robot google_robot_static \
++  --control-freq 3 --sim-freq 513 --max-episode-steps 80 \
++  --env-name ${env_name} --scene-name ${scene_name} \
++  --robot-init-x 0.35 0.35 1 --robot-init-y 0.20 0.20 1 --obj-init-x -0.35 -0.12 3 --obj-init-y -0.02 0.42 3 \
++  --robot-init-rot-quat-center 0 0 0 1 --robot-init-rot-rpy-range 0 0 1 0 0 1 0 0 1 \
++  --additional-env-build-kwargs ${coke_can_option} slightly_brighter_lighting=True;
++
++done
++
++done
++
++
++
++
++# camera orientations
++
++declare -a env_arr=("GraspSingleOpenedCokeCanAltGoogleCameraInScene-v0" \
++                   "GraspSingleOpenedCokeCanAltGoogleCamera2InScene-v0")
++scene_name=google_pick_coke_can_1_v4
++
++for coke_can_option in "${coke_can_options_arr[@]}";
++
++do for env_name in "${env_arr[@]}";
++
++do for ckpt_path in "${arr[@]}";
++
++do CUDA_VISIBLE_DEVICES=${gpu_id} python simpler_env/main_inference.py --policy-model ${policy_model} --ckpt-path ${ckpt_path} --action-ensemble-temp ${action_ensemble_temp} --logging-dir ${logging_dir} \
++  --robot google_robot_static \
++  --control-freq 3 --sim-freq 513 --max-episode-steps 80 \
++  --env-name ${env_name} --scene-name ${scene_name} \
++  --robot-init-x 0.35 0.35 1 --robot-init-y 0.20 0.20 1 --obj-init-x -0.35 -0.12 3 --obj-init-y -0.02 0.42 3 \
++  --robot-init-rot-quat-center 0 0 0 1 --robot-init-rot-rpy-range 0 0 1 0 0 1 0 0 1 \
++  --additional-env-build-kwargs ${coke_can_option};
++
++done
++
++done
++
++done
+diff --git a/simpler_env/evaluation/maniskill2_evaluator.py b/simpler_env/evaluation/maniskill2_evaluator.py
+index a824479..e895632 100644
+--- a/simpler_env/evaluation/maniskill2_evaluator.py
++++ b/simpler_env/evaluation/maniskill2_evaluator.py
+@@ -113,7 +113,7 @@ def run_maniskill2_eval_single_episode(
+     task_descriptions = []
+     while not (predicted_terminated or truncated):
+         # step the model; "raw_action" is raw model action output; "action" is the processed action to be sent into maniskill env
+-        raw_action, action = model.step(image, task_description, eef_pos=obs["agent"]["eef_pos"])
++        raw_action, action = model.step(image, task_description, eef_pos=obs["agent"].get("eef_pos"))
+         predicted_actions.append(raw_action)
+         predicted_terminated = bool(action["terminate_episode"][0] > 0)
+         if predicted_terminated:
+diff --git a/simpler_env/policies/openvla/openvla_model.py b/simpler_env/policies/openvla/openvla_model.py
+index 715c779..d95361e 100644
+--- a/simpler_env/policies/openvla/openvla_model.py
++++ b/simpler_env/policies/openvla/openvla_model.py
+@@ -8,6 +8,8 @@ from PIL import Image
+ import torch
+ import cv2 as cv
+ 
++from experiments.robot.triage_utils import TriageOpenVLA
++
+ 
+ class OpenVLAInference:
+     def __init__(
+@@ -36,14 +38,7 @@ class OpenVLAInference:
+         self.unnorm_key = unnorm_key
+ 
+         print(f"*** policy_setup: {policy_setup}, unnorm_key: {unnorm_key} ***")
+-        self.processor = AutoProcessor.from_pretrained(saved_model_path, trust_remote_code=True)
+-        self.vla = AutoModelForVision2Seq.from_pretrained(
+-            saved_model_path,
+-            attn_implementation="flash_attention_2",  # [Optional] Requires `flash_attn`
+-            torch_dtype=torch.bfloat16,
+-            low_cpu_mem_usage=True,
+-            trust_remote_code=True,
+-        ).cuda()
++        self.policy = TriageOpenVLA(saved_model_path)
+ 
+         self.image_size = image_size
+         self.action_scale = action_scale
+@@ -68,6 +63,7 @@ class OpenVLAInference:
+         self.gripper_action_repeat = 0
+         self.sticky_gripper_action = 0.0
+         self.previous_gripper_action = None
++        self.policy.reset()
+ 
+     def step(
+         self, image: np.ndarray, task_description: Optional[str] = None, *args, **kwargs
+@@ -91,12 +87,7 @@ class OpenVLAInference:
+         assert image.dtype == np.uint8
+         image = self._resize_image(image)
+ 
+-        image: Image.Image = Image.fromarray(image)
+-        prompt = task_description
+-
+-        # predict action (7-dof; un-normalize for bridgev2)
+-        inputs = self.processor(prompt, image).to("cuda:0", dtype=torch.bfloat16)
+-        raw_actions = self.vla.predict_action(**inputs, unnorm_key=self.unnorm_key, do_sample=False)[None]
++        raw_actions = np.asarray(self.policy(image, task_description, self.unnorm_key, crop=False))[None]
+         # print(f"*** raw actions {raw_actions} ***")
+ 
+         raw_action = {

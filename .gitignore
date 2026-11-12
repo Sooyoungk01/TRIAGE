@@ -1,0 +1,6 @@
+__pycache__/
+*.egg-info/
+checkpoints/
+results/
+rollouts/
+experiments/logs/
