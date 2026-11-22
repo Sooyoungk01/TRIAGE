@@ -1,5 +1,7 @@
 imageio[ffmpeg]
 robosuite==1.4.1
+mujoco==2.3.7
+numpy==1.26.4
 bddl
 easydict
 cloudpickle

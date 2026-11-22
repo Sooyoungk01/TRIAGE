@@ -72,9 +72,12 @@ pip install -e src/openvla-oft
 Install LIBERO in each environment:
 
 ```bash
-git clone https://github.com/Lifelong-Robot-Learning/LIBERO.git && pip install -e LIBERO
+git clone https://github.com/Lifelong-Robot-Learning/LIBERO.git
+pip install -e LIBERO --config-settings editable_mode=compat
 pip install -r src/openvla/experiments/robot/libero/libero_requirements.txt
 ```
+
+`editable_mode=compat` is needed with recent `setuptools`, which otherwise installs LIBERO so that `import libero` fails. The requirements file pins `numpy` 1.26.4 and `mujoco` 2.3.7, the versions used for the paper; without the pins, pip installs NumPy 2, which PyTorch 2.2.0 cannot load.
 
 ## Checkpoints
 

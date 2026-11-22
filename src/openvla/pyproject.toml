@@ -39,7 +39,7 @@ dependencies = [
     "jsonlines",
     "matplotlib",
     "peft==0.11.1",
-    "protobuf",
+    "protobuf==3.20.3",
     "rich",
     "sentencepiece==0.1.99",
     "timm==0.9.10",
@@ -48,10 +48,11 @@ dependencies = [
     "torchvision==0.17.0",
     "torchaudio==2.2.0",
     "transformers @ git+https://github.com/siyuhsu/transformers.git@2302fce58afa3a4f8461625b1394f9e9c8a7f1ea",
-    "wandb",
+    "wandb==0.25.0",
     "tensorflow==2.15.0",
     "tensorflow_datasets==4.9.3",
     "tensorflow_graphics==2021.12.3",
+    "tensorflow-metadata==1.14.0",
     "dlimp @ git+https://github.com/moojink/dlimp_openvla"
 ]
 
