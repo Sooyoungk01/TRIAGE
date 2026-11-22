@@ -3,7 +3,7 @@
 Official implementation of **TRIAGE: Efficient Vision-Language-Action Inference Needs Both Reuse and Pruning**.
 
 [![Paper](https://img.shields.io/badge/Paper-coming%20soon-blue)](#citation)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](src/openvla/LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 <p align="center">
   <img src="./figure_1.png" alt="TRIAGE overview" width="85%">
@@ -78,7 +78,7 @@ pip install -r src/openvla/experiments/robot/libero/libero_requirements.txt
 
 ## Checkpoints
 
-We use the public LIBERO checkpoints of each backbone, and the base OpenVLA checkpoint on SimplerEnv. They are downloaded into `checkpoints/` on first use:
+We use the public LIBERO checkpoints of each backbone, and the base OpenVLA checkpoint on SimplerEnv. They are downloaded on first use into `src/openvla/checkpoints/` or `src/openvla-oft/checkpoints/`:
 
 - OpenVLA: `openvla/openvla-7b-finetuned-libero-*`
 - OpenVLA-OFT: `moojink/openvla-7b-oft-finetuned-libero-*`
@@ -105,7 +105,7 @@ scripts/reproduce_libero.sh openvla
 scripts/reproduce_libero.sh openvla-oft
 ```
 
-Results are written to `results/<suite>_trials<a>-<b>.jsonl`, one `episode` record per episode. An interrupted run resumes from the episodes already logged. Add `--log_steps` to also record the recomputed rows and prefill time of every query.
+Results are written to `src/openvla/results/` or `src/openvla-oft/results/` as `<suite>_trials<a>-<b>.jsonl`, one `episode` record per episode. An interrupted run resumes from the episodes already logged. Add `--log_steps` to also record the recomputed rows and prefill time of every query.
 
 The paper numbers were produced with OSMesa rendering. EGL rendering can change pixels slightly, and with them the rollouts.
 
@@ -122,8 +122,12 @@ The defaults in `triage_utils.py` match the paper. Notation follows Section IV.
 | Cache age limit `T` | `max_age` | 10 | 10 | 10 |
 | Maintenance fraction `µ` | `maint_ratio` | 0.06 | 0.06 | 0.06 |
 | Forecast weight `λ` | `lam` | 1.0 | 1.0 | 1.0 |
+| Tokens recomputed at the first query | `first_bvis` | 227 | 163 | 163 |
+| Hysteresis on the important set | `hysteresis` | 1.25 | 1.25 | 1.25 |
 
-`B` matches SAFE-Pruner's FLOPs. Any value can be overridden from the command line, for example `--b_vis 28 --n_important 98` for the budget sweep in Fig. 4.
+`B` matches SAFE-Pruner's FLOPs. The last two rows are implementation settings not described in the paper. On OpenVLA-OFT, the LIBERO-Goal values (`B = 91`, `n_important = 161`) are applied automatically when `--task_suite_name libero_goal` is given.
+
+The following can be overridden from the command line: `--b_vis`, `--n_important`, `--first_bvis`, `--prune_layer`, `--max_age`, `--delta`, `--maint_ratio`, and `--hysteresis`. For example, `--b_vis 28 --n_important 98` runs one point of the budget sweep in Fig. 4. `λ` has no command-line option; change `lam` in `triage_utils.py` instead.
 
 ## SimplerEnv Evaluation
 
@@ -164,4 +168,4 @@ If you use TRIAGE in your research, please cite:
 
 ## License
 
-The code under `src/openvla` and `src/openvla-oft` keeps its original MIT license (see the `LICENSE` file in each directory).
+This project is released under the [MIT License](LICENSE). The upstream OpenVLA and OpenVLA-OFT code under `src/openvla` and `src/openvla-oft` keeps its original MIT license and copyright notice (see the `LICENSE` file in each directory).
