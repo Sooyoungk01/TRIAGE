@@ -1,39 +1,63 @@
 # TRIAGE
 
-TRIAGE is a training-free inference method for vision-language-action (VLA) models. At each policy query it decides, for every visual token, whether to recompute it, reuse its cached keys and values from an earlier query, or prune it.
+Official implementation of **TRIAGE: Efficient Vision-Language-Action Inference Needs Both Reuse and Pruning**.
 
-At each query, the first `K = 3` layers run densely. TRIAGE then ranks the visual tokens by importance: the layer-`K-1` attention of the action query, plus a deep-layer forecast carried over from the episode's first query. The top `N` tokens form the important set. A hysteresis factor keeps the set stable across queries.
+[![Paper](https://img.shields.io/badge/Paper-coming%20soon-blue)](#citation)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](src/openvla/LICENSE)
 
-`B` visual tokens are recomputed in layers `K..L-1`. They are chosen in this order:
+<p align="center">
+  <img src="./figure_1.png" alt="TRIAGE overview" width="85%">
+</p>
 
-1. A maintenance share (`r/B = 0.06` of the budget) refreshes the oldest cached tokens outside the important set.
-2. Important tokens without a valid cache. A cache is invalid if the token is new to the set, was computed more than `T = 10` queries ago, or has a layer-`K-1` value drift of at least `δ = 0.3`.
-3. The remaining important tokens, ordered by how much they changed.
+## Overview
 
-Every other visual token is reused as a key if its cache is valid, and pruned otherwise.
+TRIAGE is a training-free inference method for vision-language-action (VLA) models. Existing accelerators recompute only a subset of the visual tokens and send every other token to a single fate: prune-only methods discard them, and reuse-only methods serve their cached key-value (KV) states. TRIAGE instead decides per token whether to recompute, reuse, or prune it.
 
-## Layout
+The decision rests on a token-level diagnostic. Reusing a token whose shallow-layer value has drifted little since its cache was computed is no worse than pruning it, but beyond a drift threshold, reuse yields up to 4.4x the action error of pruning. TRIAGE therefore treats a cache as valid when its drift is below this threshold and it is not too old. It recomputes a fixed budget of tokens, prioritizing important tokens with invalid caches, reuses every other token with a valid cache, and prunes the rest. Because the budget fixes the number of recomputed tokens, it directly sets the prefill latency.
 
+On LIBERO and SimplerEnv, TRIAGE stays within **3 pp** of full recomputation in average success rate while cutting prefill latency on a Jetson AGX Orin by up to **48%**. With only **7%** of visual tokens recomputed, it beats the strongest baseline by **24.4 pp** on LIBERO-Object.
+
+The repository supports two backbones:
+
+- `src/openvla/`: OpenVLA-7B (256 visual tokens, autoregressive action decoding).
+- `src/openvla-oft/`: OpenVLA-OFT (512 visual tokens from two cameras, 8-step action chunk in one forward pass).
+
+## Abstract
+
+Vision-language-action (VLA) models are increasingly used for robot manipulation because they map camera images and a language instruction directly to actions. Robots that cannot be tethered to a workstation, such as mobile manipulators and humanoids, must run them on onboard embedded boards, where the prefill latency of the language backbone grows with the hundreds of visual tokens processed at every control step. To meet real-time limits, training-free accelerators recompute only a subset of the visual tokens and skip the rest, either by pruning them or by reusing their cached key-value (KV) states. The two options save nearly the same computation, yet existing methods apply only one of them to every skipped token.
+
+Through a token-level diagnostic, we show that which option keeps the action closer to full recomputation depends on the token's drift, the change in its shallow-layer value since its cache was computed. On both backbones tested, reusing tokens below a drift threshold was no worse than pruning them, whereas beyond it, reuse yields up to 4.4x the action error of pruning; the same diagnostic calibrates this threshold per backbone.
+
+Building on this finding, we propose TRIAGE, which deems a cache valid when its drift is below this threshold and it is not too old. TRIAGE recomputes a fixed budget of tokens, prioritizing important tokens with invalid caches, reuses every other token with a valid cache, and prunes the rest; prune-only and reuse-only methods are the two extremes of this partition. Because the budget fixes the number of recomputed tokens, it directly sets the prefill latency. On LIBERO and SimplerEnv, TRIAGE stays within 3 pp of full recomputation in average success rate while cutting prefill latency on a Jetson AGX Orin by up to 48%, and with only 7% of visual tokens recomputed, it beats the strongest baseline by 24.4 pp on LIBERO-Object.
+
+## Repository Structure
+
+```text
+.
+|-- figure_1.png                          # Overview figure
+|-- scripts/
+|   `-- reproduce_libero.sh               # Runs all four LIBERO suites
+|-- simpler/
+|   `-- simpler_openvla.patch             # TRIAGE patch for SimplerEnv-OpenVLA
+`-- src/
+    |-- openvla/                          # OpenVLA with TRIAGE added
+    |   |-- prismatic/extern/triage.py    # TRIAGE engine (replaces LlamaModel.forward)
+    |   |-- prismatic/extern/hf/modeling_prismatic.py  # VLA-Cache model file
+    |   `-- experiments/robot/
+    |       |-- triage_utils.py           # Model loading, per-query state, defaults
+    |       `-- libero/run_libero_eval.py # LIBERO evaluation entry point
+    `-- openvla-oft/                      # OpenVLA-OFT with TRIAGE added
+        |-- prismatic/extern/triage.py
+        `-- experiments/robot/
+            |-- triage_utils.py
+            `-- libero/run_libero_eval.py
 ```
-src/openvla/        OpenVLA, with TRIAGE added
-src/openvla-oft/    OpenVLA-OFT, with TRIAGE added
-simpler/            patch for SimplerEnv-OpenVLA
-scripts/            reproduce_libero.sh
-```
 
-The TRIAGE files inside each tree are:
+All other files under `src/` are the upstream OpenVLA and OpenVLA-OFT code.
 
-| File | Purpose |
-| --- | --- |
-| `prismatic/extern/triage.py` | TRIAGE engine. It replaces `LlamaModel.forward` at runtime. |
-| `experiments/robot/triage_utils.py` | Model loading and per-query state. |
-| `experiments/robot/libero/run_libero_eval.py` | LIBERO evaluation with TRIAGE. |
+## Setup
 
-In `src/openvla`, `prismatic/extern/hf/modeling_prismatic.py` is the VLA-Cache version, which passes the cache through `generate`. Everything else is the upstream code.
-
-## Installation
-
-Each model needs its own environment, because the two trees ship different `prismatic` packages.
+Each backbone needs its own environment, because the two trees ship different `prismatic` packages. Both pin PyTorch 2.2.0, `tokenizers` 0.21.1, and the VLA-Cache `transformers` fork at commit `2302fce`.
 
 ```bash
 # OpenVLA
@@ -45,25 +69,24 @@ conda create -n triage-oft python=3.10 -y && conda activate triage-oft
 pip install -e src/openvla-oft
 ```
 
-Then install LIBERO in each environment:
+Install LIBERO in each environment:
 
 ```bash
 git clone https://github.com/Lifelong-Robot-Learning/LIBERO.git && pip install -e LIBERO
 pip install -r src/openvla/experiments/robot/libero/libero_requirements.txt
 ```
 
-Both `pyproject.toml` files pin:
+## Checkpoints
 
-- PyTorch 2.2.0
-- `tokenizers` 0.21.1
-- the VLA-Cache `transformers` fork at commit `2302fce`
-
-## LIBERO
-
-Run from `src/openvla` or `src/openvla-oft`. Checkpoints are downloaded into `checkpoints/` on first use:
+We use the public LIBERO checkpoints of each backbone, and the base OpenVLA checkpoint on SimplerEnv. They are downloaded into `checkpoints/` on first use:
 
 - OpenVLA: `openvla/openvla-7b-finetuned-libero-*`
 - OpenVLA-OFT: `moojink/openvla-7b-oft-finetuned-libero-*`
+- SimplerEnv: `openvla/openvla-7b`
+
+## LIBERO Evaluation
+
+Run from `src/openvla` or `src/openvla-oft`:
 
 ```bash
 export MUJOCO_GL=osmesa PYOPENGL_PLATFORM=osmesa
@@ -73,45 +96,41 @@ python experiments/robot/libero/run_libero_eval.py --task_suite_name libero_spat
 
 cd src/openvla-oft
 python experiments/robot/libero/run_libero_eval.py --task_suite_name libero_goal
-python experiments/robot/libero/run_libero_eval.py --task_suite_name libero_10 --keyframe   # TRIAGE+KF
 ```
 
-| Option | Meaning |
-| --- | --- |
-| `--task_ids 0,3` | Run only these tasks. |
-| `--trial_start` / `--num_trials_per_task` | Choose which initial states to run. The default is all 50. |
-| `--pretrained_checkpoint` | Use a local directory or another Hub id. |
-| `--log_steps` | Also write one record per query: action hash, recomputed rows, prefill time in ms. |
-| `--keyframe` | Run a dense query whenever the remapped forecast and the current layer-0 saliency disagree (cosine below 0.92). |
+To reproduce all four suites (500 episodes each, split into trials 0-24 and 25-49 as in the paper):
 
-Results go to `results/<suite>[_kf]_trials<a>-<b>.jsonl`, with one `episode` record per episode. A run that is interrupted resumes from the episodes already logged.
+```bash
+scripts/reproduce_libero.sh openvla
+scripts/reproduce_libero.sh openvla-oft
+```
 
-`scripts/reproduce_libero.sh openvla` and `scripts/reproduce_libero.sh openvla-oft` run all four suites. Each suite is split into trials 0-24 and 25-49, as in the paper runs. Add `--keyframe` for TRIAGE+KF.
-
-### Hyperparameters
-
-| | OpenVLA | OFT | OFT, LIBERO-Goal |
-| --- | --- | --- | --- |
-| dense layers `K` | 3 | 3 | 3 |
-| recomputed visual tokens `B` | 88 | 163 | 91 |
-| important set `N` | 158 | 233 | 161 |
-| first-query tokens | 227 | 163 | 163 |
-| cache age bound `T` | 10 | 10 | 10 |
-| drift gate `δ` | 0.3 | 0.3 | 0.3 |
-| maintenance share `r/B` | 0.06 | 0.06 | 0.06 |
-| hysteresis | 1.25 | 1.25 | 1.25 |
-
-These are the defaults in `triage_utils.py`. Each one can be overridden from the command line, for example `--b_vis 64 --n_important 134`.
+Results are written to `results/<suite>_trials<a>-<b>.jsonl`, one `episode` record per episode. An interrupted run resumes from the episodes already logged. Add `--log_steps` to also record the recomputed rows and prefill time of every query.
 
 The paper numbers were produced with OSMesa rendering. EGL rendering can change pixels slightly, and with them the rollouts.
 
-## SimplerEnv
+### Hyperparameters
 
-The SimplerEnv runs use the base `openvla/openvla-7b` checkpoint with the OpenVLA settings above.
+The defaults in `triage_utils.py` match the paper. Notation follows Section IV.
 
-1. Set up [SimplerEnv-OpenVLA](https://github.com/DelinQu/SimplerEnv-OpenVLA) following its README, in an environment where `src/openvla` is installed.
-2. Put `src/openvla` on `PYTHONPATH`.
-3. Apply the patch and run the evaluations:
+| Paper | Code | OpenVLA | OFT | OFT, LIBERO-Goal |
+| --- | --- | --- | --- | --- |
+| Recompute budget `B` | `b_vis` | 88 | 163 | 91 |
+| Important set size `B + κ` (κ = 70) | `n_important` | 158 | 233 | 161 |
+| Signal layer `ℓs` | `prune_layer - 1` | 2 | 2 | 2 |
+| Drift threshold `δ` | `delta` | 0.3 | 0.3 | 0.3 |
+| Cache age limit `T` | `max_age` | 10 | 10 | 10 |
+| Maintenance fraction `µ` | `maint_ratio` | 0.06 | 0.06 | 0.06 |
+| Forecast weight `λ` | `lam` | 1.0 | 1.0 | 1.0 |
+
+`B` matches SAFE-Pruner's FLOPs. Any value can be overridden from the command line, for example `--b_vis 28 --n_important 98` for the budget sweep in Fig. 4.
+
+## SimplerEnv Evaluation
+
+The SimplerEnv runs use the OpenVLA settings above without retuning.
+
+1. Set up [SimplerEnv-OpenVLA](https://github.com/DelinQu/SimplerEnv-OpenVLA) in an environment where `src/openvla` is installed.
+2. Apply the patch and run the evaluations:
 
 ```bash
 cd SimplerEnv-OpenVLA
@@ -124,21 +143,25 @@ bash scripts/move_near_variant_agg_240.sh openvla/openvla-7b openvla -0.8 <log_d
 bash scripts/pick_coke_can_variant_agg_240.sh openvla/openvla-7b openvla -0.8 <log_dir> <gpu>
 ```
 
-The patch does three things:
-
-- Replaces the policy call in `openvla_model.py` with TRIAGE, which uses OpenVLA's standard prompt.
-- Resets the cache at the start of every episode.
-- Adds the two Variant Aggregation scripts with 240 episodes.
+The patch replaces the policy call with TRIAGE, resets the cache at the start of every episode, and adds the two Variant Aggregation scripts with 240 episodes.
 
 ## Acknowledgements
 
-This code builds on:
+This code builds on [OpenVLA](https://github.com/openvla/openvla), [OpenVLA-OFT](https://github.com/moojink/openvla-oft), [VLA-Cache](https://github.com/siyuhsu/vla-cache) (whose `transformers` fork and OpenVLA model file are used here), [SAFE-Pruner](https://github.com/msssl/SAFE-Pruner) (whose deep-layer saliency forecast TRIAGE uses for importance), [LIBERO](https://github.com/Lifelong-Robot-Learning/LIBERO), and [SimplerEnv](https://github.com/simpler-env/SimplerEnv).
 
-- [OpenVLA](https://github.com/openvla/openvla)
-- [OpenVLA-OFT](https://github.com/moojink/openvla-oft)
-- [VLA-Cache](https://github.com/siyuhsu/vla-cache), whose `transformers` fork and OpenVLA model file are used here
-- [SAFE-Pruner](https://github.com/msssl/SAFE-Pruner), whose deep-layer forecast TRIAGE uses for importance
-- [LIBERO](https://github.com/Lifelong-Robot-Learning/LIBERO)
-- [SimplerEnv](https://github.com/simpler-env/SimplerEnv)
+## Citation
+
+If you use TRIAGE in your research, please cite:
+
+```bibtex
+@inproceedings{kwon2026triage,
+  author    = {Kwon, Sooyoung and Joe-Wong, Carlee and Lee, Kyunghan},
+  title     = {{TRIAGE}: Efficient Vision-Language-Action Inference Needs Both Reuse and Pruning},
+  booktitle = {TBD},
+  year      = {2026}
+}
+```
+
+## License
 
 The code under `src/openvla` and `src/openvla-oft` keeps its original MIT license (see the `LICENSE` file in each directory).
