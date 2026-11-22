@@ -62,7 +62,6 @@ def main():
     ap.add_argument("--task_ids", default=None, help="comma-separated, default all")
     ap.add_argument("--trial_start", type=int, default=0)
     ap.add_argument("--num_trials_per_task", type=int, default=50)
-    ap.add_argument("--keyframe", action="store_true", help="TRIAGE+KF")
     ap.add_argument("--out", default=None)
     ap.add_argument("--log_steps", action="store_true")
     ap.add_argument("--num_steps_wait", type=int, default=10)
@@ -75,12 +74,11 @@ def main():
     suite_name = args.task_suite_name
     params = {k: (float(v) if k in ("delta", "maint_ratio", "hysteresis") else int(v))
               for k in OVERRIDES if (v := getattr(args, k)) is not None}
-    params["keyframe"] = args.keyframe
     ckpt = args.pretrained_checkpoint or f"moojink/openvla-7b-oft-finetuned-{suite_name.replace('_', '-')}"
     policy = TriageOFT(ckpt, suite_name, params)
 
     last = args.trial_start + args.num_trials_per_task - 1
-    out = args.out or str(ROOT / "results" / f"{suite_name}{'_kf' if args.keyframe else ''}_trials{args.trial_start}-{last}.jsonl")
+    out = args.out or str(ROOT / "results" / f"{suite_name}_trials{args.trial_start}-{last}.jsonl")
     os.makedirs(os.path.dirname(out), exist_ok=True)
     done_eps = set()
     if os.path.isfile(out):

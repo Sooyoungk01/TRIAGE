@@ -70,10 +70,10 @@ def prefill(model, st, x, position_ids):
     text = pos[ts:]
     is_vis = (pos >= 1) & (pos < ts)
     causal = torch.ones(S, S, dtype=torch.bool, device=dev).tril()
-    prev, kf = st["prev"], st["kf"]
+    prev, ref = st["prev"], st["ref"]
     no_cache = prev is None or prev["K"][0].shape[2] != S
-    dense = no_cache or kf is None
-    first = dense and kf is None and no_cache
+    dense = no_cache or ref is None
+    first = dense and ref is None and no_cache
     if first:
         dense = False
     a0 = layers[0].self_attn
@@ -99,11 +99,8 @@ def prefill(model, st, x, position_ids):
             a_last = att
     if not dense and not first:
         emb = x[0, 1:ts].float()
-        sim = nn.functional.normalize(emb, dim=1) @ nn.functional.normalize(kf["emb"], dim=1).t()
-        fc_now = kf["fc"][:, sim.argmax(dim=1)]
-        if st["keyframe"] and nn.functional.cosine_similarity(
-                fc_now[0].unsqueeze(0), sal0.unsqueeze(0), dim=1).item() < st["kf_threshold"]:
-            dense = True
+        sim = nn.functional.normalize(emb, dim=1) @ nn.functional.normalize(ref["emb"], dim=1).t()
+        fc_now = ref["fc"][:, sim.argmax(dim=1)]
     hK = h[:, pos].clone()
     vis = pos[is_vis]
 
@@ -189,13 +186,13 @@ def prefill(model, st, x, position_ids):
     valid[rows] = True
     st["decode"] = {"K": K, "S": S, "active": torch.ones(S, dtype=torch.bool, device=dev) if dense else ~prune,
                     "fc_layer": L - 1 if (dense or first) else None}
-    st["kf_new"] = {"emb": x[0, 1:ts].float(), "fc0": sal0} if (dense or first) else None
+    st["ref_new"] = {"emb": x[0, 1:ts].float(), "fc0": sal0} if (dense or first) else None
     if first:
-        st["kf_new"].update(kept=R_vis - 1, h2=hK[0, 1:ts].float())
-    st["kf_dec"] = []
+        st["ref_new"].update(kept=R_vis - 1, h2=hK[0, 1:ts].float())
+    st["ref_dec"] = []
     st["out"] = {"K": Kb, "V": Vb, "anchor": anchor, "frame": frame, "last_comp": last_comp, "hK": hK,
                  "valid": valid, "kept": kept}
-    st["info"] = {"keyframe": bool(dense), "rows": int(rows.numel()), "seq_len": S,
+    st["info"] = {"dense": bool(dense), "rows": int(rows.numel()), "seq_len": S,
                   "prefill_ms": t0.elapsed_time(t1) if timed else None}
     return out, cache
 
@@ -219,7 +216,7 @@ def decode(model, st, x, position_ids, cache):
         O = nn.functional.scaled_dot_product_attention(q, Kk, Vk)
         if j == d["fc_layer"]:
             p = torch.softmax(torch.matmul(q, Kk.transpose(2, 3)) / math.sqrt(a.head_dim), dim=-1, dtype=torch.float32)[0]
-            st["kf_dec"].append(_scatter_row(p[:, :, :int(keep[:S].sum())], torch.nonzero(keep[:S]).squeeze(-1), S))
+            st["ref_dec"].append(_scatter_row(p[:, :, :int(keep[:S].sum())], torch.nonzero(keep[:S]).squeeze(-1), S))
         h = _finish(layer, h, O)
     return model.norm(h), cache
 

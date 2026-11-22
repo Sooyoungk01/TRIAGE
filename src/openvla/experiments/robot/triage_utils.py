@@ -19,7 +19,7 @@ NUM_PATCHES = 256
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 TRIAGE_PARAMS = dict(prune_layer=3, b_vis=88, n_important=158, first_bvis=227, max_age=10, delta=0.3, maint_ratio=0.06,
-                     hysteresis=1.25, lam=1.0, keyframe=False, kf_threshold=0.92)
+                     hysteresis=1.25, lam=1.0)
 
 
 def local_checkpoint(name):
@@ -64,7 +64,7 @@ class TriageOpenVLA:
         self.reset()
 
     def reset(self):
-        self.prev, self.kf = None, None
+        self.prev, self.ref = None, None
 
     def unnorm_key(self, name):
         key = name if name in self.vla.norm_stats else f"{name}_no_noops"
@@ -77,13 +77,13 @@ class TriageOpenVLA:
             image = center_crop(image)
         prompt = f"In: What action should the robot take to {task_label.lower()}?\nOut:"
         inputs = self.processor(prompt, image).to(DEVICE, dtype=torch.bfloat16)
-        st = dict(self.params, prev=self.prev, kf=self.kf)
+        st = dict(self.params, prev=self.prev, ref=self.ref)
         self.vla.language_model.config.triage = st
         action, _ = self.vla.predict_action(**inputs, unnorm_key=unnorm_key, do_sample=False, return_dict_in_generate=True,
                                             output_attentions=False, past_key_values=DynamicCache())
         self.vla.language_model.config.triage = None
         self.prev, self.info = st["out"], st["info"]
-        new, dec = st["kf_new"], st["kf_dec"]
+        new, dec = st["ref_new"], st["ref_dec"]
         if new is not None and dec:
             fc1 = torch.stack(dec).mean(dim=0)[1:1 + new["emb"].shape[0]]
             if "kept" in new:
@@ -94,5 +94,5 @@ class TriageOpenVLA:
                     nb = torch.topk(hv[drop] @ hv[new["kept"]].t(), min(4, new["kept"].numel()), dim=1).indices
                     fc1 = fc1.clone()
                     fc1[drop] = fc1[new["kept"]][nb].mean(dim=1)
-            self.kf = {"emb": new["emb"], "fc": torch.stack([new["fc0"], fc1])}
+            self.ref = {"emb": new["emb"], "fc": torch.stack([new["fc0"], fc1])}
         return action

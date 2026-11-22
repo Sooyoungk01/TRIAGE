@@ -86,9 +86,8 @@ def prefill(model, st, x, position_ids):
         torch.cuda.synchronize()
         t0.record()
 
-    kf = None if no_cache else prev["kf"]
-    first = kf is None
-    dense = False
+    ref = None if no_cache else prev["ref"]
+    first = ref is None
     h = x
     for j in range(K):
         h, att = _layer(layers[j], h, pos, pos, cos, sin, Kb[j], Vb[j],
@@ -99,67 +98,59 @@ def prefill(model, st, x, position_ids):
             a_full = att
     if not first:
         emb = x[0, lo:hi].float()
-        sim = nn.functional.normalize(emb, dim=1) @ nn.functional.normalize(kf["emb"], dim=1).t()
-        fc_now = kf["fc"][:, sim.argmax(dim=1)]
-        c0 = nn.functional.cosine_similarity(fc_now[0].unsqueeze(0), sal0.unsqueeze(0), dim=1).item()
-        dense = st["keyframe"] and c0 < st["kf_threshold"]
+        sim = nn.functional.normalize(emb, dim=1) @ nn.functional.normalize(ref["emb"], dim=1).t()
+        fc_now = ref["fc"][:, sim.argmax(dim=1)]
     H = h
     vis = pos[is_vis]
 
-    if dense:
-        rows = keys = pos
-        anchor = Vb[K - 1].clone()
-        prune = torch.zeros(S, dtype=torch.bool, device=dev)
-        R_vis = vis
+    if first:
+        R_vis = vis[torch.topk(a_full[lo:hi], min(st["first_bvis"], vis.numel())).indices]
+        prune = is_vis.clone()
+        prune[R_vis] = False
     else:
-        if first:
-            R_vis = vis[torch.topk(a_full[lo:hi], min(st["first_bvis"], vis.numel())).indices]
-            prune = is_vis.clone()
-            prune[R_vis] = False
-        else:
-            imp = a_full[lo:hi] + st["lam"] * fc_now.mean(dim=0)
-            n_imp = min(st["n_important"], vis.numel())
-            prev_kept = prev["kept"]
-            order = torch.argsort(imp, descending=True)
-            rank = torch.empty_like(order)
-            rank[order] = torch.arange(order.numel(), device=dev)
-            stay = torch.nonzero(prev_kept[lo:hi] & (rank < int(round(st["hysteresis"] * n_imp)))).squeeze(-1)
-            if stay.numel() > n_imp:
-                stay = stay[torch.argsort(rank[stay])[:n_imp]]
-            rest = imp.clone()
-            rest[stay] = float("-inf")
-            imp_idx = vis[torch.cat([stay, torch.topk(rest, n_imp - stay.numel()).indices])]
+        imp = a_full[lo:hi] + st["lam"] * fc_now.mean(dim=0)
+        n_imp = min(st["n_important"], vis.numel())
+        prev_kept = prev["kept"]
+        order = torch.argsort(imp, descending=True)
+        rank = torch.empty_like(order)
+        rank[order] = torch.arange(order.numel(), device=dev)
+        stay = torch.nonzero(prev_kept[lo:hi] & (rank < int(round(st["hysteresis"] * n_imp)))).squeeze(-1)
+        if stay.numel() > n_imp:
+            stay = stay[torch.argsort(rank[stay])[:n_imp]]
+        rest = imp.clone()
+        rest[stay] = float("-inf")
+        imp_idx = vis[torch.cat([stay, torch.topk(rest, n_imp - stay.numel()).indices])]
 
-            dh = torch.linalg.norm((H - prev["H"])[0].float(), dim=-1) / (torch.linalg.norm(H[0].float(), dim=-1) + EPS)
-            impm = torch.zeros(S, dtype=torch.bool, device=dev)
-            impm[imp_idx] = True
-            old = prev["age"] + 1 > st["max_age"]
-            Vh = repeat_kv(Vb[K - 1], a0.num_key_value_groups)[0].float()
-            Ah = repeat_kv(prev["anchor"], a0.num_key_value_groups)[0].float()
-            vdrift = (torch.linalg.norm(Vh - Ah, dim=-1) / (torch.linalg.norm(Vh, dim=-1) + EPS)).mean(dim=0)
-            bad = old | ~prev["valid"] | (vdrift >= st["delta"])
+        dh = torch.linalg.norm((H - prev["H"])[0].float(), dim=-1) / (torch.linalg.norm(H[0].float(), dim=-1) + EPS)
+        impm = torch.zeros(S, dtype=torch.bool, device=dev)
+        impm[imp_idx] = True
+        old = prev["age"] + 1 > st["max_age"]
+        Vh = repeat_kv(Vb[K - 1], a0.num_key_value_groups)[0].float()
+        Ah = repeat_kv(prev["anchor"], a0.num_key_value_groups)[0].float()
+        vdrift = (torch.linalg.norm(Vh - Ah, dim=-1) / (torch.linalg.norm(Vh, dim=-1) + EPS)).mean(dim=0)
+        bad = old | ~prev["valid"] | (vdrift >= st["delta"])
 
-            impv = torch.full((S,), float("-inf"), device=dev)
-            impv[lo:hi] = imp
-            nrm = bad | ~prev_kept
-            nr, rr = imp_idx[nrm[imp_idx]], imp_idx[~nrm[imp_idx]]
-            core = torch.cat([nr[torch.argsort(impv[nr], descending=True)],
-                              rr[torch.argsort((dh * a_full)[rr], descending=True)]])
-            mc = torch.nonzero(is_vis & ~impm & prev["valid"]).squeeze(-1)
-            if mc.numel():
-                mc = mc[torch.argsort(prev["age"][mc].float() * 1e4 + impv[mc].clamp(min=-1e3), descending=True)]
-            mc = mc[:int(round(st["maint_ratio"] * B))]
-            R_vis = torch.cat([mc, core[:min(B - int(mc.numel()), n_imp)]])
-            inR = torch.zeros(S, dtype=torch.bool, device=dev)
-            inR[R_vis] = True
-            prune = is_vis & ~inR & bad
-        rows = torch.cat([R_vis, always]).sort().values
-        keys = pos[~prune]
-        anchor = Vb[K - 1].clone() if no_cache else prev["anchor"]
-        anchor[:, :, rows] = Vb[K - 1][:, :, rows]
-        h = h[:, rows]
+        impv = torch.full((S,), float("-inf"), device=dev)
+        impv[lo:hi] = imp
+        nrm = bad | ~prev_kept
+        nr, rr = imp_idx[nrm[imp_idx]], imp_idx[~nrm[imp_idx]]
+        core = torch.cat([nr[torch.argsort(impv[nr], descending=True)],
+                          rr[torch.argsort((dh * a_full)[rr], descending=True)]])
+        mc = torch.nonzero(is_vis & ~impm & prev["valid"]).squeeze(-1)
+        if mc.numel():
+            mc = mc[torch.argsort(prev["age"][mc].float() * 1e4 + impv[mc].clamp(min=-1e3), descending=True)]
+        mc = mc[:int(round(st["maint_ratio"] * B))]
+        R_vis = torch.cat([mc, core[:min(B - int(mc.numel()), n_imp)]])
+        inR = torch.zeros(S, dtype=torch.bool, device=dev)
+        inR[R_vis] = True
+        prune = is_vis & ~inR & bad
+    rows = torch.cat([R_vis, always]).sort().values
+    keys = pos[~prune]
+    anchor = Vb[K - 1].clone() if no_cache else prev["anchor"]
+    anchor[:, :, rows] = Vb[K - 1][:, :, rows]
+    h = h[:, rows]
 
-    fc_rows = torch.nonzero(torch.isin(rows, act)).squeeze(-1) if (dense or first) else None
+    fc_rows = torch.nonzero(torch.isin(rows, act)).squeeze(-1) if first else None
     cs = (cos[:, rows], sin[:, rows])
     for j in range(K, L):
         h, att = _layer(layers[j], h, rows, keys, *cs, Kb[j], Vb[j], stat_rows=fc_rows if j == L - 1 else None)
@@ -177,20 +168,16 @@ def prefill(model, st, x, position_ids):
     valid[rows] = True
     age = torch.zeros(S, dtype=torch.long, device=dev) if no_cache else prev["age"] + 1
     age[rows] = 0
-    if dense:
-        kept = is_vis.clone()
-    elif first:
+    if first:
         kept = torch.zeros(S, dtype=torch.bool, device=dev)
         kept[R_vis] = True
     else:
         kept = impm
-    if dense:
-        kf = {"emb": x[0, lo:hi].float(), "fc": torch.stack([sal0, a_deep[lo:hi].to(sal0.dtype)])}
-    elif first:
+    if first:
         fc31 = _propagate(a_deep[lo:hi].float(), R_vis - lo, H[0, lo:hi], 4)
-        kf = {"emb": x[0, lo:hi].float(), "fc": torch.stack([sal0, fc31.to(sal0.dtype)])}
-    st["out"] = {"K": Kb, "V": Vb, "anchor": anchor, "valid": valid, "H": H, "kept": kept, "age": age, "kf": kf}
-    st["info"] = {"keyframe": bool(dense), "rows": int(rows.numel()), "seq_len": S,
+        ref = {"emb": x[0, lo:hi].float(), "fc": torch.stack([sal0, fc31.to(sal0.dtype)])}
+    st["out"] = {"K": Kb, "V": Vb, "anchor": anchor, "valid": valid, "H": H, "kept": kept, "age": age, "ref": ref}
+    st["info"] = {"rows": int(rows.numel()), "seq_len": S,
                   "prefill_ms": t0.elapsed_time(t1) if timed else None}
     return out
 

@@ -12,7 +12,7 @@ from prismatic.vla.constants import ACTION_DIM, NUM_ACTIONS_CHUNK
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 TRIAGE_PARAMS = dict(prune_layer=3, b_vis=163, n_important=233, first_bvis=163, max_age=10, delta=0.3, maint_ratio=0.06,
-                     hysteresis=1.25, lam=1.0, keyframe=False, kf_threshold=0.92)
+                     hysteresis=1.25, lam=1.0)
 TRIAGE_PARAMS_GOAL = dict(b_vis=91, n_important=161)
 
 

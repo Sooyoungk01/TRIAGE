@@ -1,5 +1,5 @@
 #!/bin/bash
-# usage: scripts/reproduce_libero.sh <openvla|openvla-oft> [--keyframe]
+# usage: scripts/reproduce_libero.sh <openvla|openvla-oft>
 set -e
 cd "$(dirname "$0")/../src/$1"; shift
 for SUITE in libero_spatial libero_object libero_goal libero_10; do
